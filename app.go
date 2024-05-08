@@ -113,7 +113,7 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 	var totalTime int64
 
 	// Spin up worker goroutines
-	for i := 0; i < 10; i++ {
+	for i := 0; i < params.VU; i++ {
 		wg.Add(1)
 		go func(ctx context.Context) {
 		outerloop:
@@ -123,7 +123,12 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 					break outerloop
 				default:
 					start := time.Now()
-					resp, _ := http.DefaultClient.Do(params.Req)
+					resp, err := http.DefaultClient.Do(params.Req)
+					if err != nil {
+						if strings.Contains(err.Error(), "request canceled") {
+							continue
+						}
+					}
 					resp.Body.Close()
 
 					resultCh <- RequestResult{
