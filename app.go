@@ -16,7 +16,7 @@ import (
 func NewApp() *cli.App {
 	return &cli.App{
 		Name:    "load-send",
-		Version: "v0.0.2",
+		Version: "v0.0.3",
 		Commands: []*cli.Command{
 			{
 				Name: "http",
@@ -27,6 +27,7 @@ func NewApp() *cli.App {
 					reqMethod := strings.ToUpper(ctx.String("method"))
 					reqHeaders := ctx.StringSlice("header")
 					reqData := ctx.String("body")
+					verbose := ctx.Bool("verbose")
 
 					return SendRequests(ctx.Context, SendRequestsParams{
 						VU:         vu,
@@ -35,6 +36,7 @@ func NewApp() *cli.App {
 						ReqMethod:  reqMethod,
 						ReqHeaders: reqHeaders,
 						ReqData:    reqData,
+						Verbose:    verbose,
 					})
 				},
 				Flags: []cli.Flag{
@@ -75,6 +77,11 @@ func NewApp() *cli.App {
 						Usage:    "request url",
 						Required: true,
 					},
+					&cli.BoolFlag{
+						Name:    "verbose",
+						Aliases: []string{"v"},
+						Usage:   "verbose mode",
+					},
 				},
 			},
 		},
@@ -82,12 +89,13 @@ func NewApp() *cli.App {
 }
 
 type SendRequestsParams struct {
-	VU         int
 	Duration   time.Duration
-	ReqUrl     string
-	ReqMethod  string
-	ReqHeaders []string
 	ReqData    string
+	ReqHeaders []string
+	ReqMethod  string
+	ReqUrl     string
+	Verbose    bool
+	VU         int
 }
 
 type RequestResult struct {
@@ -142,6 +150,13 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 						}
 						fmt.Println(err)
 					}
+
+					if params.Verbose {
+						fmt.Println("Response Body:")
+						b, _ := io.ReadAll(resp.Body)
+						fmt.Println(string(b))
+					}
+
 					resp.Body.Close()
 
 					resultCh <- RequestResult{
