@@ -16,7 +16,7 @@ import (
 func NewApp() *cli.App {
 	return &cli.App{
 		Name:    "load-send",
-		Version: "v0.0.1",
+		Version: "v0.0.2",
 		Commands: []*cli.Command{
 			{
 				Name: "http",
@@ -28,26 +28,13 @@ func NewApp() *cli.App {
 					reqHeaders := ctx.StringSlice("h")
 					reqData := ctx.String("b")
 
-					var body io.Reader = nil
-					if len(reqData) > 0 {
-						fmt.Println("found body", reqData)
-						body = bytes.NewBuffer([]byte(reqData))
-					}
-
-					req, err := http.NewRequest(reqMethod, reqUrl, body)
-					if err != nil {
-						return err
-					}
-
-					for _, h := range reqHeaders {
-						splits := strings.SplitN(h, "=", 1)
-						req.Header.Set(splits[0], splits[1])
-					}
-
 					return SendRequests(ctx.Context, SendRequestsParams{
-						VU:       vu,
-						Duration: time.Second * time.Duration(duration),
-						Req:      req,
+						VU:         vu,
+						Duration:   time.Second * time.Duration(duration),
+						ReqUrl:     reqUrl,
+						ReqMethod:  reqMethod,
+						ReqHeaders: reqHeaders,
+						ReqData:    reqData,
 					})
 				},
 				Flags: []cli.Flag{
@@ -95,9 +82,12 @@ func NewApp() *cli.App {
 }
 
 type SendRequestsParams struct {
-	VU       int
-	Duration time.Duration
-	Req      *http.Request
+	VU         int
+	Duration   time.Duration
+	ReqUrl     string
+	ReqMethod  string
+	ReqHeaders []string
+	ReqData    string
 }
 
 type RequestResult struct {
@@ -124,8 +114,24 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 				case <-ctx.Done():
 					break outerloop
 				default:
+					var body io.Reader = nil
+					if len(params.ReqData) > 0 {
+						body = bytes.NewBuffer([]byte(params.ReqData))
+					}
+
+					req, err := http.NewRequest(params.ReqMethod, params.ReqUrl, body)
+					if err != nil {
+						panic(err)
+					}
+
+					for _, h := range params.ReqHeaders {
+						fmt.Println(h)
+						splits := strings.SplitN(h, ":", 1)
+						req.Header.Set(strings.TrimSpace(splits[0]), strings.TrimSpace(splits[1]))
+					}
+
 					start := time.Now()
-					resp, err := http.DefaultClient.Do(params.Req)
+					resp, err := http.DefaultClient.Do(req)
 					if err != nil {
 						if strings.Contains(err.Error(), "request canceled") {
 							continue
