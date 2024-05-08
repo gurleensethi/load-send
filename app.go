@@ -15,6 +15,8 @@ import (
 
 func NewApp() *cli.App {
 	return &cli.App{
+		Name:    "load-send",
+		Version: "v0.0.1",
 		Commands: []*cli.Command{
 			{
 				Name: "http",
@@ -128,6 +130,7 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 						if strings.Contains(err.Error(), "request canceled") {
 							continue
 						}
+						fmt.Println(err)
 					}
 					resp.Body.Close()
 
