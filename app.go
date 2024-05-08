@@ -21,12 +21,12 @@ func NewApp() *cli.App {
 			{
 				Name: "http",
 				Action: func(ctx *cli.Context) error {
-					vu := ctx.Int("vu")
-					duration := ctx.Int("d")
-					reqUrl := ctx.String("u")
-					reqMethod := strings.ToUpper(ctx.String("m"))
-					reqHeaders := ctx.StringSlice("h")
-					reqData := ctx.String("b")
+					vu := ctx.Int("virual-users")
+					duration := ctx.Int("duration")
+					reqUrl := ctx.String("url")
+					reqMethod := strings.ToUpper(ctx.String("method"))
+					reqHeaders := ctx.StringSlice("header")
+					reqData := ctx.String("body")
 
 					return SendRequests(ctx.Context, SendRequestsParams{
 						VU:         vu,
@@ -125,9 +125,13 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 					}
 
 					for _, h := range params.ReqHeaders {
-						fmt.Println(h)
-						splits := strings.SplitN(h, ":", 1)
-						req.Header.Set(strings.TrimSpace(splits[0]), strings.TrimSpace(splits[1]))
+						splits := strings.SplitN(h, ":", 2)
+						key := splits[0]
+						value := ""
+						if len(splits) > 1 {
+							value = splits[1]
+						}
+						req.Header.Set(key, value)
 					}
 
 					start := time.Now()
