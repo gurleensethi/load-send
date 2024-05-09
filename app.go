@@ -28,9 +28,21 @@ func NewApp() *cli.App {
 					duration := ctx.Int("duration")
 					reqUrl := ctx.String("url")
 					reqMethod := strings.ToUpper(ctx.String("method"))
-					reqHeaders := ctx.StringSlice("header")
 					reqData := ctx.String("body")
+					reqTimeout := ctx.Int("timeout")
 					verbose := ctx.Bool("verbose")
+
+					rawHeaders := ctx.StringSlice("header")
+					reqHeaders := make(map[string]string)
+					for _, h := range rawHeaders {
+						splits := strings.SplitN(h, ":", 2)
+						key := splits[0]
+						value := ""
+						if len(splits) > 1 {
+							value = splits[1]
+						}
+						reqHeaders[key] = value
+					}
 
 					return SendRequests(ctx.Context, SendRequestsParams{
 						VU:         vu,
@@ -39,6 +51,7 @@ func NewApp() *cli.App {
 						ReqMethod:  reqMethod,
 						ReqHeaders: reqHeaders,
 						ReqData:    reqData,
+						ReqTimeout: reqTimeout,
 						Verbose:    verbose,
 					})
 				},
@@ -80,6 +93,12 @@ func NewApp() *cli.App {
 						Usage:    "request url",
 						Required: true,
 					},
+					&cli.IntFlag{
+						Name:    "timeout",
+						Aliases: []string{"to"},
+						Value:   30,
+						Usage:   "request timeout",
+					},
 					&cli.BoolFlag{
 						Name:    "verbose",
 						Aliases: []string{"v"},
@@ -94,9 +113,10 @@ func NewApp() *cli.App {
 type SendRequestsParams struct {
 	Duration   time.Duration
 	ReqData    string
-	ReqHeaders []string
+	ReqHeaders map[string]string
 	ReqMethod  string
 	ReqUrl     string
+	ReqTimeout int
 	Verbose    bool
 	VU         int
 }
@@ -110,6 +130,9 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 	wg := sync.WaitGroup{}
 	ctx, cancel := context.WithCancel(ctx)
 	resultCh := make(chan RequestResult, params.VU)
+	httpClient := http.Client{
+		Timeout: time.Second * time.Duration(params.ReqTimeout),
+	}
 	var totalRequests int64
 	var totalFailedRequests int64
 	var totalPassedRequests int64
@@ -136,18 +159,12 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 						panic(err)
 					}
 
-					for _, h := range params.ReqHeaders {
-						splits := strings.SplitN(h, ":", 2)
-						key := splits[0]
-						value := ""
-						if len(splits) > 1 {
-							value = splits[1]
-						}
+					for key, value := range params.ReqHeaders {
 						req.Header.Set(key, value)
 					}
 
 					start := time.Now()
-					resp, err := http.DefaultClient.Do(req)
+					resp, err := httpClient.Do(req)
 					if err != nil {
 						if strings.Contains(err.Error(), "request canceled") {
 							continue
@@ -224,8 +241,28 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 		responseStatusCodeCount[res.Response.StatusCode] = currentCount
 	}
 
+	printResult(params, result{
+		totalRequests:           totalRequests,
+		totalFailedRequests:     totalFailedRequests,
+		totalPassedRequests:     totalPassedRequests,
+		totalTime:               totalTime,
+		responseStatusCodeCount: responseStatusCodeCount,
+	})
+
+	return nil
+}
+
+type result struct {
+	totalRequests           int64
+	totalFailedRequests     int64
+	totalPassedRequests     int64
+	totalTime               int64
+	responseStatusCodeCount map[int]int
+}
+
+func printResult(params SendRequestsParams, r result) {
 	statusCodeLines := make([]string, 0)
-	for key, value := range responseStatusCodeCount {
+	for key, value := range r.responseStatusCodeCount {
 		statusCodeLines = append(statusCodeLines,
 			fmt.Sprintf("    HTTP %d \t %d\n", key, value),
 		)
@@ -237,15 +274,13 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 	fmt.Fprintf(writer, "\n\n")
 	fmt.Fprintf(writer, "VUs \t %d\n", params.VU)
 	fmt.Fprintf(writer, "Duration \t %s\n", params.Duration.String())
-	fmt.Fprintf(writer, "Total Requests \t %d\n", totalRequests)
+	fmt.Fprintf(writer, "Total Requests \t %d\n", r.totalRequests)
 	for _, line := range statusCodeLines {
 		fmt.Fprint(writer, line)
 	}
-	fmt.Fprintf(writer, "Total Request Time (ms) \t %d\n", totalTime)
-	fmt.Fprintf(writer, "Average Latency (ms) \t %d\n", totalTime/totalRequests)
-	fmt.Fprintf(writer, "requests/sec \t %d\n", totalRequests/int64(params.Duration.Seconds()))
+	fmt.Fprintf(writer, "Total Request Time (ms) \t %d\n", r.totalTime)
+	fmt.Fprintf(writer, "Average Latency (ms) \t %d\n", r.totalTime/r.totalRequests)
+	fmt.Fprintf(writer, "requests/sec \t %d\n", r.totalRequests/int64(params.Duration.Seconds()))
 	_ = writer.Flush()
 	fmt.Fprintf(writer, "\n\n")
-
-	return nil
 }
