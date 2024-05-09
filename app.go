@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -124,6 +126,7 @@ type SendRequestsParams struct {
 type RequestResult struct {
 	Response *http.Response
 	Duration time.Duration
+	Timeout  bool
 }
 
 func SendRequests(ctx context.Context, params SendRequestsParams) error {
@@ -137,6 +140,7 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 	var totalFailedRequests int64
 	var totalPassedRequests int64
 	var totalTime int64
+	var totalTimeouts int64
 	var responseStatusCodeCount = make(map[int]int)
 
 	// Spin up worker goroutines
@@ -169,6 +173,15 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 						if strings.Contains(err.Error(), "request canceled") {
 							continue
 						}
+
+						var urlErr *url.Error
+						if errors.As(err, &urlErr) && urlErr.Timeout() {
+							resultCh <- RequestResult{
+								Timeout: true,
+							}
+							continue
+						}
+
 						fmt.Println(err)
 					}
 
@@ -228,8 +241,13 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 	}()
 
 	for res := range resultCh {
-		totalTime += res.Duration.Milliseconds()
+		if res.Timeout {
+			totalTimeouts++
+			continue
+		}
+
 		totalRequests++
+		totalTime += res.Duration.Milliseconds()
 		if res.Response.StatusCode >= 200 && res.Response.StatusCode < 300 {
 			totalPassedRequests++
 		} else {
@@ -246,6 +264,7 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 		totalFailedRequests:     totalFailedRequests,
 		totalPassedRequests:     totalPassedRequests,
 		totalTime:               totalTime,
+		totalTimeouts:           totalTimeouts,
 		responseStatusCodeCount: responseStatusCodeCount,
 	})
 
@@ -257,6 +276,7 @@ type result struct {
 	totalFailedRequests     int64
 	totalPassedRequests     int64
 	totalTime               int64
+	totalTimeouts           int64
 	responseStatusCodeCount map[int]int
 }
 
@@ -271,6 +291,11 @@ func printResult(params SendRequestsParams, r result) {
 
 	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 5, ' ', tabwriter.Debug|tabwriter.AlignRight)
 
+	var averageLatency int64
+	if r.totalRequests > 0 {
+		averageLatency = r.totalTime / r.totalRequests
+	}
+
 	fmt.Fprintf(writer, "\n\n")
 	fmt.Fprintf(writer, "VUs \t %d\n", params.VU)
 	fmt.Fprintf(writer, "Duration \t %s\n", params.Duration.String())
@@ -278,8 +303,9 @@ func printResult(params SendRequestsParams, r result) {
 	for _, line := range statusCodeLines {
 		fmt.Fprint(writer, line)
 	}
+	fmt.Fprintf(writer, "Total Timeouts \t %d\n", r.totalTimeouts)
 	fmt.Fprintf(writer, "Total Request Time (ms) \t %d\n", r.totalTime)
-	fmt.Fprintf(writer, "Average Latency (ms) \t %d\n", r.totalTime/r.totalRequests)
+	fmt.Fprintf(writer, "Average Latency (ms) \t %d\n", averageLatency)
 	fmt.Fprintf(writer, "requests/sec \t %d\n", r.totalRequests/int64(params.Duration.Seconds()))
 	_ = writer.Flush()
 	fmt.Fprintf(writer, "\n\n")
