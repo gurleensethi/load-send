@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"slices"
 	"strings"
 	"sync"
+	"text/tabwriter"
 	"time"
 
 	"github.com/urfave/cli/v2"
@@ -16,7 +19,7 @@ import (
 func NewApp() *cli.App {
 	return &cli.App{
 		Name:    "load-send",
-		Version: "v0.0.3",
+		Version: "v0.0.4",
 		Commands: []*cli.Command{
 			{
 				Name: "http",
@@ -111,6 +114,7 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 	var totalFailedRequests int64
 	var totalPassedRequests int64
 	var totalTime int64
+	var responseStatusCodeCount = make(map[int]int)
 
 	// Spin up worker goroutines
 	for i := 0; i < params.VU; i++ {
@@ -169,9 +173,12 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 		}(ctx)
 	}
 
+	ticker := time.NewTicker(time.Millisecond * 200)
 	timer := time.NewTimer(params.Duration)
+	start := time.Now()
 	go func() {
 		<-timer.C
+		ticker.Stop()
 		cancel()
 	}()
 
@@ -179,6 +186,28 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 	go func() {
 		wg.Wait()
 		close(resultCh)
+	}()
+
+	go func() {
+		for {
+			_, ok := <-ticker.C
+			if !ok {
+				break
+			}
+
+			progress := (time.Since(start).Milliseconds() * 100 / params.Duration.Milliseconds())
+			// remaining := 100 - progress
+
+			totalBars := 50
+			progressBars := (totalBars * int(progress)) / 100
+			remainingBars := totalBars - progressBars
+
+			fmt.Printf("\rSending Requests [%s>%s] %d%%",
+				strings.Repeat("=", int(progressBars)),
+				strings.Repeat("-", int(remainingBars)),
+				progress,
+			)
+		}
 	}()
 
 	for res := range resultCh {
@@ -189,13 +218,34 @@ func SendRequests(ctx context.Context, params SendRequestsParams) error {
 		} else {
 			totalFailedRequests++
 		}
+
+		currentCount := responseStatusCodeCount[res.Response.StatusCode]
+		currentCount++
+		responseStatusCodeCount[res.Response.StatusCode] = currentCount
 	}
 
-	fmt.Println("Total Requests:", totalRequests)
-	fmt.Println("Total Passed (200-299):", totalPassedRequests)
-	fmt.Println("Total Failed (>300):", totalFailedRequests)
-	fmt.Println("Total Request Time (ms):", totalTime)
-	fmt.Println("Average Latency (ms):", totalTime/totalRequests)
+	statusCodeLines := make([]string, 0)
+	for key, value := range responseStatusCodeCount {
+		statusCodeLines = append(statusCodeLines,
+			fmt.Sprintf("    HTTP %d \t %d\n", key, value),
+		)
+	}
+	slices.Sort(statusCodeLines)
+
+	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 5, ' ', tabwriter.Debug|tabwriter.AlignRight)
+
+	fmt.Fprintf(writer, "\n\n")
+	fmt.Fprintf(writer, "VUs \t %d\n", params.VU)
+	fmt.Fprintf(writer, "Duration \t %s\n", params.Duration.String())
+	fmt.Fprintf(writer, "Total Requests \t %d\n", totalRequests)
+	for _, line := range statusCodeLines {
+		fmt.Fprint(writer, line)
+	}
+	fmt.Fprintf(writer, "Total Request Time (ms) \t %d\n", totalTime)
+	fmt.Fprintf(writer, "Average Latency (ms) \t %d\n", totalTime/totalRequests)
+	fmt.Fprintf(writer, "requests/sec \t %d\n", totalRequests/int64(params.Duration.Seconds()))
+	_ = writer.Flush()
+	fmt.Fprintf(writer, "\n\n")
 
 	return nil
 }
