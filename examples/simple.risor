@@ -1,0 +1,17 @@
+func before() {
+    print("before()")
+}
+
+func after() {
+    print("after()")
+}
+
+func run() {    
+    load.http({
+        url: "https://example.com",
+        method: "GET",
+        headers: {
+        },
+    })
+    time.sleep(1)
+}

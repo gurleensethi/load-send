@@ -15,13 +15,63 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/gurleensethi/load-send/script"
 	"github.com/urfave/cli/v2"
+)
+
+const (
+	loadScriptNotFoundMsg = "load script not provided\nusage: load-send <path_to_script>"
 )
 
 func NewApp() *cli.App {
 	return &cli.App{
 		Name:    "load-send",
 		Version: "v0.0.4",
+		Action: func(ctx *cli.Context) error {
+			if ctx.NArg() == 0 {
+				return errors.New(loadScriptNotFoundMsg)
+			}
+
+			scriptFile, err := os.ReadFile(ctx.Args().First())
+			if err != nil {
+				return err
+			}
+
+			duration := ctx.Int("duration")
+			verbose := ctx.Bool("verbose")
+			vu := ctx.Int("virual-users")
+
+			err = script.RunLoadScript(ctx.Context, string(scriptFile), script.RunLoadScriptOptions{
+				Duration: time.Duration(duration),
+				Verbose:  verbose,
+				VU:       vu,
+			})
+			if err != nil {
+				return err
+			}
+
+			return nil
+		},
+		Flags: []cli.Flag{
+			&cli.IntFlag{
+				Name:        "virual-users",
+				Aliases:     []string{"vu"},
+				Value:       10,
+				DefaultText: "10",
+				Usage:       "number of virtual users",
+			},
+			&cli.IntFlag{
+				Name:        "duration",
+				Aliases:     []string{"d"},
+				Value:       60,
+				DefaultText: "60",
+				Usage:       "duration to run (in seconds)",
+			},
+			&cli.BoolFlag{
+				Name:  "verbose",
+				Usage: "verbose mode",
+			},
+		},
 		Commands: []*cli.Command{
 			{
 				Name: "http",
@@ -56,56 +106,6 @@ func NewApp() *cli.App {
 						ReqTimeout: reqTimeout,
 						Verbose:    verbose,
 					})
-				},
-				Flags: []cli.Flag{
-					&cli.IntFlag{
-						Name:        "virual-users",
-						Aliases:     []string{"vu"},
-						Value:       10,
-						DefaultText: "10",
-						Usage:       "number of virtual users",
-					},
-					&cli.IntFlag{
-						Name:        "duration",
-						Aliases:     []string{"d"},
-						Value:       60,
-						DefaultText: "60",
-						Usage:       "duration to run (in seconds)",
-					},
-					&cli.StringFlag{
-						Name:        "method",
-						Aliases:     []string{"m"},
-						Value:       "GET",
-						DefaultText: "GET",
-						Usage:       "http method for request",
-					},
-					&cli.StringSliceFlag{
-						Name:    "header",
-						Aliases: []string{"H"},
-						Usage:   "request headers",
-					},
-					&cli.StringFlag{
-						Name:    "body",
-						Aliases: []string{"b"},
-						Usage:   "request data",
-					},
-					&cli.StringFlag{
-						Name:     "url",
-						Aliases:  []string{"u"},
-						Usage:    "request url",
-						Required: true,
-					},
-					&cli.IntFlag{
-						Name:    "timeout",
-						Aliases: []string{"to"},
-						Value:   30,
-						Usage:   "request timeout",
-					},
-					&cli.BoolFlag{
-						Name:    "verbose",
-						Aliases: []string{"v"},
-						Usage:   "verbose mode",
-					},
 				},
 			},
 		},
