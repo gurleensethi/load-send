@@ -3,6 +3,7 @@ func run() {
         url: "https://www.example.com/",
         method: "GET",
         headers: {
+            "accept": "*/*"
         },
     })
     if resp != nil {
@@ -12,16 +13,4 @@ func run() {
             resp.fail('status is not 200 {resp.statusCode}')
         }
     }
-
-    // resp = load.http({
-    //     url: "https://www.github.com/",
-    //     method: "GET",
-    // })
-    // if resp != nil {
-    //     if resp.statusCode == 200 {
-    //         resp.success()
-    //     } else {
-    //         resp.fail('status is not 200 {resp.statusCode}')
-    //     }
-    // }
 }

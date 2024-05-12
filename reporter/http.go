@@ -131,6 +131,7 @@ type HttpReporterResult struct {
 	SuccessRPS              float64
 	TotalFailedRequests     int
 	TotalFailedRequestTime  int
+	FailedRequestReasons    map[string]int
 	TotalRequests           int
 	TotalRequestTime        int
 	TotalRPS                float64
@@ -169,6 +170,11 @@ func (r *HttpStatusReporter) GetResult() HttpReporterResult {
 		totalRPS = float64(r.totalRequests) / float64(r.totalRequestTime/1000)
 	}
 
+	failedRequestReasons := make(map[string]int)
+	for key, value := range r.failedRequestReasons {
+		failedRequestReasons[key] = value
+	}
+
 	return HttpReporterResult{
 		AverageFailedLatency:    averageFailedLatency,
 		AverageLatency:          averageLatency,
@@ -178,6 +184,7 @@ func (r *HttpStatusReporter) GetResult() HttpReporterResult {
 		TotalFailedRequests:     r.totalFailedRequests,
 		TotalFailedRequestTime:  r.totalFailedRequestTime,
 		TotalRequests:           r.totalRequests,
+		FailedRequestReasons:    failedRequestReasons,
 		TotalRequestTime:        r.totalRequestTime,
 		TotalRPS:                totalRPS,
 		TotalSuccessRequests:    r.totalSuccessRequests,
@@ -206,17 +213,26 @@ func (h httpReporterUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (h httpReporterUIModel) View() string {
 	box := lipgloss.NewStyle().Margin(2).Padding(2)
 
-	rows := [][]string{
-		{"Total Requests", strconv.FormatInt(int64(h.httpResult.TotalRequests), 10)},
-		{"Total Success Requests", strconv.FormatInt(int64(h.httpResult.TotalSuccessRequests), 10)},
-		{"Total Failed Requests", strconv.FormatInt(int64(h.httpResult.TotalFailedRequests), 10)},
-		{"Average Latency", strconv.FormatInt(int64(h.httpResult.AverageLatency), 10)},
-		{"Average Success Latency", strconv.FormatInt(int64(h.httpResult.AverageSuccessLatency), 10)},
-		{"Average Failed Latency", strconv.FormatInt(int64(h.httpResult.AverageFailedLatency), 10)},
-		{"Total RPS", strconv.FormatInt(int64(h.httpResult.TotalRPS), 10)},
-		{"Success RPS", strconv.FormatInt(int64(h.httpResult.SuccessRPS), 10)},
-		{"Failed RPS", strconv.FormatInt(int64(h.httpResult.FailedRPS), 10)},
+	rows := [][]string{}
+
+	rows = append(rows,
+		[]string{"Total Requests", strconv.FormatInt(int64(h.httpResult.TotalRequests), 10)},
+		[]string{"Total Success Requests", strconv.FormatInt(int64(h.httpResult.TotalSuccessRequests), 10)},
+		[]string{"Total Failed Requests", strconv.FormatInt(int64(h.httpResult.TotalFailedRequests), 10)},
+	)
+
+	for key, value := range h.httpResult.FailedRequestReasons {
+		rows = append(rows, []string{key, strconv.FormatInt(int64(value), 10)})
 	}
+
+	rows = append(rows,
+		[]string{"Average Latency", strconv.FormatInt(int64(h.httpResult.AverageLatency), 10)},
+		[]string{"Average Success Latency", strconv.FormatInt(int64(h.httpResult.AverageSuccessLatency), 10)},
+		[]string{"Average Failed Latency", strconv.FormatInt(int64(h.httpResult.AverageFailedLatency), 10)},
+		[]string{"Total RPS", strconv.FormatInt(int64(h.httpResult.TotalRPS), 10)},
+		[]string{"Success RPS", strconv.FormatInt(int64(h.httpResult.SuccessRPS), 10)},
+		[]string{"Failed RPS", strconv.FormatInt(int64(h.httpResult.FailedRPS), 10)},
+	)
 
 	t := table.New().
 		Headers("Metric", "Value").
