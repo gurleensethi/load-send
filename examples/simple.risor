@@ -8,7 +8,7 @@ func after() {
 
 func run() {    
     resp := load.http({
-        url: "https://github.com",
+        url: "https://www.example.com/",
         method: "GET",
         headers: {
         },
@@ -17,7 +17,7 @@ func run() {
         if resp.statusCode == 200 {
             resp.success()
         } else {
-            resp.fail("status is not 200 {resp.statusCode}")
+            resp.fail('status is not 200 {resp.statusCode}')
         }
     }    
 }
