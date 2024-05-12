@@ -13,15 +13,15 @@ func run() {
         }
     }
 
-    resp = load.http({
-        url: "https://www.github.com/",
-        method: "GET",
-    })
-    if resp != nil {
-        if resp.statusCode == 200 {
-            resp.success()
-        } else {
-            resp.fail('status is not 200 {resp.statusCode}')
-        }
-    }
+    // resp = load.http({
+    //     url: "https://www.github.com/",
+    //     method: "GET",
+    // })
+    // if resp != nil {
+    //     if resp.statusCode == 200 {
+    //         resp.success()
+    //     } else {
+    //         resp.fail('status is not 200 {resp.statusCode}')
+    //     }
+    // }
 }
