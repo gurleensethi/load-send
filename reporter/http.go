@@ -3,15 +3,21 @@ package reporter
 import (
 	"fmt"
 	"os"
-	"sync"
-	"text/tabwriter"
+	"strconv"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 )
 
 func NewHttpStatusReporter() *HttpStatusReporter {
 	return &HttpStatusReporter{
 		failedRequestReasons: make(map[string]int),
 		reportCh:             make(chan report, 100),
-		wg:                   &sync.WaitGroup{},
+		closeTUIUpdatesCh:    make(chan struct{}),
+		closeUICh:            make(chan struct{}),
+		closeReportCh:        make(chan struct{}),
 	}
 }
 
@@ -30,53 +36,122 @@ type HttpStatusReporter struct {
 	totalRequestTime        int
 	failedRequestReasons    map[string]int
 	reportCh                chan report
-	wg                      *sync.WaitGroup
+	closeTUIUpdatesCh       chan struct{}
+	closeUICh               chan struct{}
+	closeReportCh           chan struct{}
+	teaProgram              *tea.Program
 }
 
 func (r *HttpStatusReporter) Start() {
-	r.wg.Add(1)
+	// Start the UI
+	go func() {
+		r.teaProgram = tea.NewProgram(httpReporterUIModel{})
+		_, err := r.teaProgram.Run()
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		// Print out the result
+		// fmt.Println(model.View())
+
+		r.closeUICh <- struct{}{}
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-r.closeTUIUpdatesCh:
+				return
+			default:
+				if r.teaProgram != nil {
+					// Send updates to UI
+					r.teaProgram.Send(r.GetResult())
+				}
+			}
+
+			time.Sleep(time.Second)
+		}
+	}()
+
+	// Start listening to results
 	go func() {
 		for rep := range r.reportCh {
 			r.totalRequests++
 			r.totalRequestTime += rep.reqDuration
 
 			if rep.isSuccess {
+				r.totalSuccessRequestTime += rep.reqDuration
 				r.totalSuccessRequests++
 			} else {
+				r.totalFailedRequestTime += rep.reqDuration
+				r.totalFailedRequests++
 				r.failedRequestReasons[rep.failReason]++
 			}
 		}
 
-		r.wg.Done()
+		r.closeReportCh <- struct{}{}
 	}()
 }
 
 func (r *HttpStatusReporter) Stop() {
+	// Close the report channel and wait for anything in
+	// the channel buffer to be exhausted.
 	close(r.reportCh)
-	r.wg.Wait()
+	<-r.closeReportCh
+
+	// Stop the UI updates
+	r.closeTUIUpdatesCh <- struct{}{}
+
+	// Quit the UI and wait for the tea.Program
+	// to complete
+	r.teaProgram.Send(tea.Quit())
+	<-r.closeUICh
 }
 
 func (r *HttpStatusReporter) ReportSuccessRequest(duration int) {
-	r.totalRequests++
-	r.totalSuccessRequests++
-	r.totalSuccessRequestTime += duration
-	r.totalRequestTime += duration
+	r.reportCh <- report{
+		reqDuration: duration,
+		isSuccess:   true,
+	}
 }
 
 func (r *HttpStatusReporter) ReportFailedRequest(duration int, reason string) {
-	r.totalRequests++
-	r.totalFailedRequests++
-	r.totalFailedRequestTime += duration
-	r.totalRequestTime += duration
-	r.failedRequestReasons[reason]++
+	r.reportCh <- report{
+		reqDuration: duration,
+		isSuccess:   false,
+		failReason:  reason,
+	}
 }
 
-func (r *HttpStatusReporter) Print() {
-	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 5, ' ', tabwriter.Debug|tabwriter.AlignRight)
+type HttpReporterResult struct {
+	AverageFailedLatency    int
+	AverageLatency          int
+	AverageSuccessLatency   int
+	FailedRPS               float64
+	SuccessRPS              float64
+	TotalFailedRequests     int
+	TotalFailedRequestTime  int
+	TotalRequests           int
+	TotalRequestTime        int
+	TotalRPS                float64
+	TotalSuccessRequests    int
+	TotalSuccessRequestTime int
+}
 
+func (r *HttpStatusReporter) GetResult() HttpReporterResult {
 	var averageLatency int
 	if r.totalRequests > 0 {
 		averageLatency = r.totalRequestTime / r.totalRequests
+	}
+
+	var averageSuccessLatency int
+	if r.totalSuccessRequests > 0 {
+		averageSuccessLatency = r.totalSuccessRequestTime / r.totalSuccessRequests
+	}
+
+	var averageFailedLatency int
+	if r.totalFailedRequests > 0 {
+		averageFailedLatency = r.totalFailedRequestTime / r.totalFailedRequests
 	}
 
 	var successRPS float64
@@ -94,22 +169,81 @@ func (r *HttpStatusReporter) Print() {
 		totalRPS = float64(r.totalRequests) / float64(r.totalRequestTime/1000)
 	}
 
-	fmt.Fprintf(writer, "\n\n")
-	fmt.Fprintf(writer, "Total Requests \t %d\n", r.totalRequests)
-	fmt.Fprintf(writer, "Total Success Requests \t %d\n", r.totalSuccessRequests)
-	fmt.Fprintf(writer, "Total Failed Requests \t %d\n", r.totalFailedRequests)
-	if len(r.failedRequestReasons) > 0 {
-		for key, value := range r.failedRequestReasons {
-			fmt.Fprintf(writer, "%s \t %d\n", key, value)
-		}
+	return HttpReporterResult{
+		AverageFailedLatency:    averageFailedLatency,
+		AverageLatency:          averageLatency,
+		AverageSuccessLatency:   averageSuccessLatency,
+		FailedRPS:               failedRPS,
+		SuccessRPS:              successRPS,
+		TotalFailedRequests:     r.totalFailedRequests,
+		TotalFailedRequestTime:  r.totalFailedRequestTime,
+		TotalRequests:           r.totalRequests,
+		TotalRequestTime:        r.totalRequestTime,
+		TotalRPS:                totalRPS,
+		TotalSuccessRequests:    r.totalSuccessRequests,
+		TotalSuccessRequestTime: r.totalSuccessRequestTime,
 	}
-	fmt.Fprintf(writer, "Total Success Request Time (ms) \t %d\n", r.totalSuccessRequestTime)
-	fmt.Fprintf(writer, "Total Failed Request Time (ms) \t %d\n", r.totalFailedRequestTime)
-	fmt.Fprintf(writer, "Total Request Time (ms) \t %d\n", r.totalRequestTime)
-	fmt.Fprintf(writer, "Average Latency (ms) \t %d\n", averageLatency)
-	fmt.Fprintf(writer, "Success RPS \t %0.2f\n", successRPS)
-	fmt.Fprintf(writer, "Failed RPS \t %0.2f\n", failedRPS)
-	fmt.Fprintf(writer, "Total RPS \t %0.2f\n", totalRPS)
-	_ = writer.Flush()
-	fmt.Fprintf(writer, "\n\n")
 }
+
+type httpReporterUIModel struct {
+	httpResult HttpReporterResult
+}
+
+func (h httpReporterUIModel) Init() tea.Cmd {
+	return nil
+}
+
+func (h httpReporterUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case HttpReporterResult:
+		h.httpResult = msg
+		return h, nil
+	}
+
+	return h, nil
+}
+
+func (h httpReporterUIModel) View() string {
+	box := lipgloss.NewStyle().Margin(2).Padding(2)
+
+	rows := [][]string{
+		{"Total Requests", strconv.FormatInt(int64(h.httpResult.TotalRequests), 10)},
+		{"Total Success Requests", strconv.FormatInt(int64(h.httpResult.TotalSuccessRequests), 10)},
+		{"Total Failed Requests", strconv.FormatInt(int64(h.httpResult.TotalFailedRequests), 10)},
+		{"Average Latency", strconv.FormatInt(int64(h.httpResult.AverageLatency), 10)},
+		{"Average Success Latency", strconv.FormatInt(int64(h.httpResult.AverageSuccessLatency), 10)},
+		{"Average Failed Latency", strconv.FormatInt(int64(h.httpResult.AverageFailedLatency), 10)},
+		{"Total RPS", strconv.FormatInt(int64(h.httpResult.TotalRPS), 10)},
+		{"Success RPS", strconv.FormatInt(int64(h.httpResult.SuccessRPS), 10)},
+		{"Failed RPS", strconv.FormatInt(int64(h.httpResult.FailedRPS), 10)},
+	}
+
+	t := table.New().
+		Headers("Metric", "Value").
+		Width(50).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("99"))).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row%2 == 1 {
+				return lipgloss.NewStyle().PaddingLeft(2).PaddingRight(2)
+			} else {
+				return lipgloss.NewStyle().PaddingLeft(2).PaddingRight(2)
+			}
+		}).
+		Rows(rows...)
+
+	width, _ := lipgloss.Size(t.Render())
+
+	title := lipgloss.NewStyle().
+		Background(lipgloss.Color("99")).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		AlignHorizontal(lipgloss.Center).
+		MarginBottom(1).
+		Width(width)
+
+	return box.Render(lipgloss.JoinVertical(lipgloss.Left,
+		title.Render("Load Send"),
+		t.Render(),
+	))
+}
+
+var _ tea.Model = httpReporterUIModel{}

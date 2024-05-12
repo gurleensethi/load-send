@@ -24,6 +24,7 @@ type RunLoadScriptOptions struct {
 
 func RunLoadScript(ctx context.Context, script string, opts RunLoadScriptOptions) error {
 	httpReporter := reporter.NewHttpStatusReporter()
+	httpReporter.Start()
 
 	risorCfg := risor.NewConfig(
 		risor.WithGlobals(map[string]any{
@@ -77,12 +78,12 @@ func RunLoadScript(ctx context.Context, script string, opts RunLoadScriptOptions
 		return err
 	}
 
-	httpReporter.Print()
+	httpReporter.Stop()
 
 	return nil
 }
 
-func getFunFromVM(ctx context.Context, vm *vm.VirtualMachine, fnName string) (*object.Function, error) {
+func getFunFromVM(_ context.Context, vm *vm.VirtualMachine, fnName string) (*object.Function, error) {
 	fnObject, err := vm.Get(fnName)
 	if err != nil && !strings.Contains(err.Error(), "not found") {
 		return nil, err
