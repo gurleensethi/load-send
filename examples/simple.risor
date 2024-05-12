@@ -1,16 +1,15 @@
 func run() {    
     resp := load.http({
-        url: "https://www.example.com/",
+        url: "https://example.com/",
         method: "GET",
         headers: {
-            "accept": "*/*"
         },
     })
     if resp != nil {
         if resp.statusCode == 200 {
             resp.success()
         } else {
-            resp.fail('status is not 200 {resp.statusCode}')
+            resp.fail('status 200 != {resp.statusCode}')
         }
     }
 }

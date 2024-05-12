@@ -88,7 +88,7 @@ func httpFn(httpReporter *reporter.HttpStatusReporter) object.BuiltinFunction {
 
 		start := time.Now()
 		httpResp, httpErr := http.DefaultClient.Do(httpReq)
-		end := time.Since(start) + time.Millisecond
+		end := time.Since(start)
 		if httpErr != nil {
 			var urlErr *url.Error
 			if errors.As(httpErr, &urlErr) && urlErr.Timeout() {

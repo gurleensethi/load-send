@@ -28,6 +28,7 @@ type report struct {
 }
 
 type HttpStatusReporter struct {
+	startTime               time.Time
 	totalRequests           int
 	totalSuccessRequests    int
 	totalFailedRequests     int
@@ -91,6 +92,8 @@ func (r *HttpStatusReporter) Start() {
 
 		r.closeReportCh <- struct{}{}
 	}()
+
+	r.startTime = time.Now()
 }
 
 func (r *HttpStatusReporter) Stop() {
@@ -133,13 +136,15 @@ type HttpReporterResult struct {
 	TotalFailedRequestTime  int
 	FailedRequestReasons    map[string]int
 	TotalRequests           int
-	TotalRequestTime        int
+	TotalRequestTimeMillis  int
 	TotalRPS                float64
 	TotalSuccessRequests    int
 	TotalSuccessRequestTime int
 }
 
 func (r *HttpStatusReporter) GetResult() HttpReporterResult {
+	elapsedDurationSeconds := time.Since(r.startTime).Seconds()
+
 	var averageLatency int
 	if r.totalRequests > 0 {
 		averageLatency = r.totalRequestTime / r.totalRequests
@@ -157,17 +162,17 @@ func (r *HttpStatusReporter) GetResult() HttpReporterResult {
 
 	var successRPS float64
 	if r.totalSuccessRequests > 0 {
-		successRPS = float64(r.totalSuccessRequests) / float64(r.totalSuccessRequestTime/1000)
+		successRPS = float64(r.totalSuccessRequests) / elapsedDurationSeconds
 	}
 
 	var failedRPS float64
 	if r.totalFailedRequests > 0 {
-		failedRPS = float64(r.totalFailedRequests) / float64(r.totalFailedRequestTime/1000)
+		failedRPS = float64(r.totalFailedRequests) / elapsedDurationSeconds
 	}
 
 	var totalRPS float64
 	if r.totalRequests > 0 {
-		totalRPS = float64(r.totalRequests) / float64(r.totalRequestTime/1000)
+		totalRPS = float64(r.totalRequests) / elapsedDurationSeconds
 	}
 
 	failedRequestReasons := make(map[string]int)
@@ -185,7 +190,7 @@ func (r *HttpStatusReporter) GetResult() HttpReporterResult {
 		TotalFailedRequestTime:  r.totalFailedRequestTime,
 		TotalRequests:           r.totalRequests,
 		FailedRequestReasons:    failedRequestReasons,
-		TotalRequestTime:        r.totalRequestTime,
+		TotalRequestTimeMillis:  r.totalRequestTime,
 		TotalRPS:                totalRPS,
 		TotalSuccessRequests:    r.totalSuccessRequests,
 		TotalSuccessRequestTime: r.totalSuccessRequestTime,
@@ -222,14 +227,15 @@ func (h httpReporterUIModel) View() string {
 	)
 
 	for key, value := range h.httpResult.FailedRequestReasons {
-		rows = append(rows, []string{key, strconv.FormatInt(int64(value), 10)})
+		rows = append(rows, []string{"Failed / " + key, strconv.FormatInt(int64(value), 10)})
 	}
 
 	rows = append(rows,
-		[]string{"Average Latency", strconv.FormatInt(int64(h.httpResult.AverageLatency), 10)},
-		[]string{"Average Success Latency", strconv.FormatInt(int64(h.httpResult.AverageSuccessLatency), 10)},
-		[]string{"Average Failed Latency", strconv.FormatInt(int64(h.httpResult.AverageFailedLatency), 10)},
-		[]string{"Total RPS", strconv.FormatInt(int64(h.httpResult.TotalRPS), 10)},
+		[]string{"Total Request Time (ms)", strconv.FormatInt(int64(h.httpResult.TotalRequestTimeMillis), 10)},
+		[]string{"Average Latency (ms)", strconv.FormatInt(int64(h.httpResult.AverageLatency), 10)},
+		[]string{"Average Success Latency (ms)", strconv.FormatInt(int64(h.httpResult.AverageSuccessLatency), 10)},
+		[]string{"Average Failed Latency (ms)", strconv.FormatInt(int64(h.httpResult.AverageFailedLatency), 10)},
+		[]string{"RPS", strconv.FormatInt(int64(h.httpResult.TotalRPS), 10)},
 		[]string{"Success RPS", strconv.FormatInt(int64(h.httpResult.SuccessRPS), 10)},
 		[]string{"Failed RPS", strconv.FormatInt(int64(h.httpResult.FailedRPS), 10)},
 	)
