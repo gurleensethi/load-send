@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gurleensethi/load-send/reporter"
 	"github.com/gurleensethi/load-send/script/modules/load"
 	"github.com/risor-io/risor"
 	"github.com/risor-io/risor/compiler"
@@ -22,9 +23,11 @@ type RunLoadScriptOptions struct {
 }
 
 func RunLoadScript(ctx context.Context, script string, opts RunLoadScriptOptions) error {
+	httpReporter := reporter.NewHttpStatusReporter()
+
 	risorCfg := risor.NewConfig(
 		risor.WithGlobals(map[string]any{
-			"load": load.Module(),
+			"load": load.Module(httpReporter),
 		}),
 	)
 
@@ -73,6 +76,8 @@ func RunLoadScript(ctx context.Context, script string, opts RunLoadScriptOptions
 	if err != nil {
 		return err
 	}
+
+	httpReporter.Print()
 
 	return nil
 }

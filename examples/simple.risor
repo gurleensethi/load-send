@@ -7,11 +7,17 @@ func after() {
 }
 
 func run() {    
-    load.http({
-        url: "https://example.com",
+    resp := load.http({
+        url: "https://github.com",
         method: "GET",
         headers: {
         },
     })
-    time.sleep(1)
+    if resp != nil {
+        if resp.statusCode == 200 {
+            resp.success()
+        } else {
+            resp.fail("status is not 200 {resp.statusCode}")
+        }
+    }    
 }
