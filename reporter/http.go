@@ -259,13 +259,14 @@ func (h httpReporterUIModel) View() string {
 		Background(lipgloss.Color("99")).
 		Foreground(lipgloss.Color("#FAFAFA")).
 		AlignHorizontal(lipgloss.Center).
-		MarginBottom(1).
+		Margin(2).
 		Width(width)
 
-	return box.Render(lipgloss.JoinVertical(lipgloss.Left,
+	return lipgloss.JoinVertical(lipgloss.Left,
 		title.Render("Load Send"),
-		t.Render(),
-	))
+		box.Render(t.Render()),
+		"",
+	)
 }
 
 var _ tea.Model = httpReporterUIModel{}

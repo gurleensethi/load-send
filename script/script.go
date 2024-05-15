@@ -116,6 +116,13 @@ func executeScriptLifecycle(ctx context.Context, virtualMachine *vm.VirtualMachi
 	ctx, cancel := context.WithCancel(ctx)
 	errCh := make(chan error, o.opts.VU)
 
+	// Timer to cancel workers after duration
+	timer := time.NewTimer(o.opts.Duration * time.Second)
+	go func() {
+		<-timer.C
+		cancel()
+	}()
+
 	// Spin up workers
 	for i := 0; i < o.opts.VU; i++ {
 		// Clone the vm so that we can do parallel executions of the runFn.
@@ -134,7 +141,7 @@ func executeScriptLifecycle(ctx context.Context, virtualMachine *vm.VirtualMachi
 				case <-ctx.Done():
 					break outerloop
 				default:
-					_, err = virtualMachine.Call(context.WithoutCancel(ctx), o.runFn, []object.Object{})
+					_, err = virtualMachine.Call(ctx, o.runFn, []object.Object{})
 					if err != nil {
 						errCh <- err
 						break outerloop
@@ -155,13 +162,6 @@ func executeScriptLifecycle(ctx context.Context, virtualMachine *vm.VirtualMachi
 			cancel()
 		case <-ctx.Done():
 		}
-	}()
-
-	// Timer to cancel workers after duration
-	timer := time.NewTimer(o.opts.Duration * time.Second)
-	go func() {
-		<-timer.C
-		cancel()
 	}()
 
 	// Wait for all workers to stop

@@ -15,6 +15,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	lifecyclescript "github.com/gurleensethi/load-send/internal/script"
 	"github.com/gurleensethi/load-send/script"
 	"github.com/urfave/cli/v2"
 )
@@ -28,84 +29,56 @@ func NewApp() *cli.App {
 		Name:    "load-send",
 		Version: "v0.0.4",
 		Action: func(ctx *cli.Context) error {
-			if ctx.NArg() == 0 {
-				return errors.New(loadScriptNotFoundMsg)
-			}
-
-			scriptFile, err := os.ReadFile(ctx.Args().First())
-			if err != nil {
-				return err
-			}
-
-			duration := ctx.Int("duration")
-			verbose := ctx.Bool("verbose")
-			vu := ctx.Int("virual-users")
-
-			err = script.RunLoadScript(ctx.Context, string(scriptFile), script.RunLoadScriptOptions{
-				Duration: time.Duration(duration),
-				Verbose:  verbose,
-				VU:       vu,
-			})
-			if err != nil {
-				return err
-			}
-
-			return nil
-		},
-		Flags: []cli.Flag{
-			&cli.IntFlag{
-				Name:        "virual-users",
-				Aliases:     []string{"vu"},
-				Value:       10,
-				DefaultText: "10",
-				Usage:       "number of virtual users",
-			},
-			&cli.IntFlag{
-				Name:        "duration",
-				Aliases:     []string{"d"},
-				Value:       60,
-				DefaultText: "60",
-				Usage:       "duration to run (in seconds)",
-			},
-			&cli.BoolFlag{
-				Name:  "verbose",
-				Usage: "verbose mode",
-			},
+			s := lifecyclescript.New()
+			return s.Run(ctx.Context, ctx.Args().Get(0), nil)
 		},
 		Commands: []*cli.Command{
 			{
 				Name: "http",
 				Action: func(ctx *cli.Context) error {
-					vu := ctx.Int("virual-users")
-					duration := ctx.Int("duration")
-					reqUrl := ctx.String("url")
-					reqMethod := strings.ToUpper(ctx.String("method"))
-					reqData := ctx.String("body")
-					reqTimeout := ctx.Int("timeout")
-					verbose := ctx.Bool("verbose")
-
-					rawHeaders := ctx.StringSlice("header")
-					reqHeaders := make(map[string]string)
-					for _, h := range rawHeaders {
-						splits := strings.SplitN(h, ":", 2)
-						key := splits[0]
-						value := ""
-						if len(splits) > 1 {
-							value = splits[1]
-						}
-						reqHeaders[key] = value
+					if ctx.NArg() == 0 {
+						return errors.New(loadScriptNotFoundMsg)
 					}
 
-					return SendRequests(ctx.Context, SendRequestsParams{
-						VU:         vu,
-						Duration:   time.Second * time.Duration(duration),
-						ReqUrl:     reqUrl,
-						ReqMethod:  reqMethod,
-						ReqHeaders: reqHeaders,
-						ReqData:    reqData,
-						ReqTimeout: reqTimeout,
-						Verbose:    verbose,
+					scriptFile, err := os.ReadFile(ctx.Args().First())
+					if err != nil {
+						return err
+					}
+
+					duration := ctx.Int("duration")
+					verbose := ctx.Bool("verbose")
+					vu := ctx.Int("virual-users")
+
+					err = script.RunLoadScript(ctx.Context, string(scriptFile), script.RunLoadScriptOptions{
+						Duration: time.Duration(duration),
+						Verbose:  verbose,
+						VU:       vu,
 					})
+					if err != nil {
+						return err
+					}
+
+					return nil
+				},
+				Flags: []cli.Flag{
+					&cli.IntFlag{
+						Name:        "virual-users",
+						Aliases:     []string{"vu"},
+						Value:       10,
+						DefaultText: "10",
+						Usage:       "number of virtual users",
+					},
+					&cli.IntFlag{
+						Name:        "duration",
+						Aliases:     []string{"d"},
+						Value:       60,
+						DefaultText: "60",
+						Usage:       "duration to run (in seconds)",
+					},
+					&cli.BoolFlag{
+						Name:  "verbose",
+						Usage: "verbose mode",
+					},
 				},
 			},
 		},
