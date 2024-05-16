@@ -15,9 +15,11 @@ import (
 	"text/tabwriter"
 	"time"
 
-	lifecyclescript "github.com/gurleensethi/load-send/internal/script"
+	"github.com/gurleensethi/load-send/internal/starlark/modules/loadsend"
+	lifecyclescript "github.com/gurleensethi/load-send/internal/starlark/script"
 	"github.com/gurleensethi/load-send/script"
 	"github.com/urfave/cli/v2"
+	"go.starlark.net/starlarkstruct"
 )
 
 const (
@@ -29,7 +31,9 @@ func NewApp() *cli.App {
 		Name:    "load-send",
 		Version: "v0.0.4",
 		Action: func(ctx *cli.Context) error {
-			s := lifecyclescript.New()
+			s := lifecyclescript.New(map[string]*starlarkstruct.Module{
+				"loadsend": loadsend.New(),
+			})
 			return s.Run(ctx.Context, ctx.Args().Get(0), nil)
 		},
 		Commands: []*cli.Command{

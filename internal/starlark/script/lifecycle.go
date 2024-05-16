@@ -8,13 +8,18 @@ import (
 	"time"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 	"go.starlark.net/syntax"
 )
 
-type LifecycleScript struct{}
+type LifecycleScript struct {
+	Modules map[string]*starlarkstruct.Module
+}
 
-func New() *LifecycleScript {
-	return &LifecycleScript{}
+func New(m map[string]*starlarkstruct.Module) *LifecycleScript {
+	return &LifecycleScript{
+		Modules: m,
+	}
 }
 
 type RunOptions struct {
@@ -30,8 +35,20 @@ func (s *LifecycleScript) Run(ctx context.Context, filename string, opts *RunOpt
 		}
 	}
 
+	predeclared := starlark.StringDict{}
+	if s.Modules != nil {
+		for key, value := range s.Modules {
+			predeclared[key] = value
+		}
+	}
+
 	thread := &starlark.Thread{Name: "main"}
-	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, filename, nil, starlark.StringDict{})
+	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{
+		Set:             true,
+		While:           true,
+		TopLevelControl: true,
+		GlobalReassign:  true,
+	}, thread, filename, nil, predeclared)
 	if err != nil {
 		return err
 	}
@@ -91,8 +108,11 @@ type lifecycleOpts struct {
 }
 
 func (s *LifecycleScript) runLifecycle(ctx context.Context, thread *starlark.Thread, lc lifecycle, opts lifecycleOpts) error {
+	var beforeAllReturn starlark.Value
+
 	if lc.beforeAllFn != nil {
-		_, err := starlark.Call(thread, lc.beforeAllFn, starlark.Tuple{}, []starlark.Tuple{})
+		var err error
+		beforeAllReturn, err = starlark.Call(thread, lc.beforeAllFn, nil, nil)
 		if err != nil {
 			return err
 		}
@@ -109,19 +129,69 @@ func (s *LifecycleScript) runLifecycle(ctx context.Context, thread *starlark.Thr
 		go func(ctx context.Context, num int) {
 			thread := &starlark.Thread{Name: fmt.Sprintf("runner: %d", num)}
 
-			args := starlark.Tuple{
-				starlark.MakeInt(num),
-			}
-
 		outerloop:
 			for {
 				select {
 				case <-ctx.Done():
 					break outerloop
 				default:
-					_, err := starlark.Call(thread, lc.runFn, args, []starlark.Tuple{})
+					var beforeEachReturn starlark.Value
+					var runReturn starlark.Value
+					var err error
+
+					// ===== Before Each =====
+
+					if lc.beforeEachFn != nil {
+						beforeEachArgs := starlark.Tuple{}
+						if lc.beforeEachFn.NumParams() > 0 {
+							data := starlarkstruct.FromKeywords(starlarkstruct.Default, []starlark.Tuple{
+								{starlark.String("before_all"), beforeAllReturn},
+							})
+							beforeEachArgs = append(beforeEachArgs, data)
+						}
+
+						beforeEachReturn, err = starlark.Call(thread, lc.beforeEachFn, beforeEachArgs, []starlark.Tuple{})
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+					}
+
+					// ===== Run =====
+
+					runArgs := starlark.Tuple{}
+					if lc.runFn.NumParams() > 0 {
+						data := starlarkstruct.FromKeywords(starlarkstruct.Default, []starlark.Tuple{
+							{starlark.String("before_all"), beforeAllReturn},
+							{starlark.String("before_each"), beforeEachReturn},
+						})
+						runArgs = append(runArgs, data)
+					}
+
+					runReturn, err = starlark.Call(thread, lc.runFn, runArgs, []starlark.Tuple{})
 					if err != nil {
 						fmt.Println(err)
+						break
+					}
+
+					// ===== After Each =====
+
+					afterEachArgs := starlark.Tuple{}
+					if lc.afterEachFn.NumParams() > 0 {
+						data := starlarkstruct.FromKeywords(starlarkstruct.Default, []starlark.Tuple{
+							{starlark.String("before_all"), beforeAllReturn},
+							{starlark.String("before_each"), beforeEachReturn},
+							{starlark.String("run"), runReturn},
+						})
+						afterEachArgs = append(afterEachArgs, data)
+					}
+
+					if lc.afterEachFn != nil {
+						_, err := starlark.Call(thread, lc.afterEachFn, afterEachArgs, []starlark.Tuple{})
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
 					}
 				}
 
