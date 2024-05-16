@@ -7,7 +7,10 @@ def before_each(data):
     }
 
 def run(data):
-    loadsend.http({})
+    loadsend.http(
+        method = "GET",
+        url = "OK",
+    )
 
 def after_each(data):
     pass

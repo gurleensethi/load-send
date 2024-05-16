@@ -205,8 +205,16 @@ func (s *LifecycleScript) runLifecycle(ctx context.Context, thread *starlark.Thr
 	workersWG.Wait()
 	cancel()
 
+	afterAllArgs := starlark.Tuple{}
+	if lc.afterAllFn.NumParams() > 0 {
+		data := starlarkstruct.FromKeywords(starlarkstruct.Default, []starlark.Tuple{
+			{starlark.String("before_all"), beforeAllReturn},
+		})
+		afterAllArgs = append(afterAllArgs, data)
+	}
+
 	if lc.afterAllFn != nil {
-		_, err := starlark.Call(thread, lc.afterAllFn, starlark.Tuple{}, []starlark.Tuple{})
+		_, err := starlark.Call(thread, lc.afterAllFn, afterAllArgs, nil)
 		if err != nil {
 			return err
 		}
