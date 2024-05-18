@@ -45,6 +45,8 @@ func (h *HttpRepoter) Type() string {
 func (h *HttpRepoter) GetReport() Report {
 	var totalRequests int = len(h.records)
 	var totalTime time.Duration
+	var totalSuccessRequests int
+	var totalFailedRequests int
 
 	bucketStart := *h.records[0].start
 	for _, record := range h.records {
@@ -66,12 +68,20 @@ func (h *HttpRepoter) GetReport() Report {
 		}
 
 		totalTime += record.duration()
+
+		if record.success {
+			totalSuccessRequests++
+		} else {
+			totalFailedRequests++
+		}
 	}
 
 	return Report{
 		DisplayLines: []string{
 			fmt.Sprintf("Total Requests: %d", len(h.records)),
 			fmt.Sprintf("Total Request Time: %.2f seconds", totalTime.Seconds()),
+			fmt.Sprintf("Total Success Requests: %d", totalSuccessRequests),
+			fmt.Sprintf("Total Failed Requests: %d", totalFailedRequests),
 			fmt.Sprintf("Requests per second: %.2f", float64(totalRequests)/bucketCount),
 		},
 	}
