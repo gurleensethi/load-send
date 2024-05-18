@@ -7,10 +7,15 @@ def before_each(data):
     }
 
 def run(data):
-    loadsend.http(
+    resp = loadsend.http(
         method = "GET",
-        url = "OK",
+        url = "https://example.com",
     )
+
+    if resp.status_code == 200:
+        resp.success()
+    else:
+        resp.failed()
 
 def after_each(data):
     pass

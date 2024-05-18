@@ -35,6 +35,8 @@ func (s *LifecycleScript) Run(ctx context.Context, filename string, opts *RunOpt
 		}
 	}
 
+	fmt.Printf("running loadsend using %d VUs for %.0f seconds\n", opts.VU, opts.Duration.Seconds())
+
 	predeclared := starlark.StringDict{}
 	if s.Modules != nil {
 		for key, value := range s.Modules {
@@ -194,8 +196,6 @@ func (s *LifecycleScript) runLifecycle(ctx context.Context, thread *starlark.Thr
 						}
 					}
 				}
-
-				time.Sleep(time.Second)
 			}
 
 			workersWG.Done()
