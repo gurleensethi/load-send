@@ -82,6 +82,7 @@ func (h *HttpRepoter) GetReport() Report {
 			fmt.Sprintf("Total Request Time: %.2f seconds", totalTime.Seconds()),
 			fmt.Sprintf("Total Success Requests: %d", totalSuccessRequests),
 			fmt.Sprintf("Total Failed Requests: %d", totalFailedRequests),
+			fmt.Sprintf("Average Latency: %.2f seconds", totalTime.Seconds()/float64(totalRequests)),
 			fmt.Sprintf("Requests per second: %.2f", float64(totalRequests)/bucketCount),
 		},
 	}

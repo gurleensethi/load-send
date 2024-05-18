@@ -2,11 +2,13 @@ package loadsend
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 
 	repoter "github.com/gurleensethi/load-send/internal/reporter"
+	"github.com/gurleensethi/load-send/internal/starlark/utils"
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
@@ -24,29 +26,33 @@ func New(repoters Reporters) *starlarkstruct.Module {
 		Name: "loadsend",
 		Members: starlark.StringDict{
 			"http": starlark.NewBuiltin("http", func(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-				var method starlark.String
-				var url starlark.String
-				var body starlark.String
+				var method string
+				var url string
+				var body string
 				var headers *starlark.Dict
 
 				err := starlark.UnpackArgs(fn.Name(), args, kwargs,
 					"method?", &method,
-					"url?", &url,
+					"url", &url,
 					"body?", &body,
 					"headers?", &headers,
 				)
 				if err != nil {
-					return nil, err
+					return nil, utils.NewErrorWithStack(thread, err)
+				}
+
+				if url == "" {
+					return nil, utils.NewErrorWithStack(thread, errors.New("url cannot be empty"))
 				}
 
 				var b io.Reader
 				if body != "" {
-					b = bytes.NewBuffer([]byte(body.GoString()))
+					b = bytes.NewBuffer([]byte(body))
 				}
 
-				httpReq, err := http.NewRequest(method.GoString(), url.GoString(), b)
+				httpReq, err := http.NewRequest(method, url, b)
 				if err != nil {
-					return nil, err
+					return nil, utils.NewErrorWithStack(thread, err)
 				}
 
 				record := repoters.HttpRepoter.NewRecord()
@@ -54,18 +60,18 @@ func New(repoters Reporters) *starlarkstruct.Module {
 				record.Start()
 				resp, err := http.DefaultClient.Do(httpReq)
 				if err != nil {
-					return nil, err
+					return nil, utils.NewErrorWithStack(thread, err)
 				}
 				record.End()
 
 				respBody, err := io.ReadAll(resp.Body)
 				if err != nil {
-					return nil, err
+					return nil, utils.NewErrorWithStack(thread, err)
 				}
 
 				err = resp.Body.Close()
 				if err != nil {
-					return nil, err
+					return nil, utils.NewErrorWithStack(thread, err)
 				}
 
 				respHeaders := starlark.NewDict(0)
@@ -78,7 +84,7 @@ func New(repoters Reporters) *starlarkstruct.Module {
 
 				err = repoters.HttpRepoter.Record(record)
 				if err != nil {
-					return nil, err
+					return nil, utils.NewErrorWithStack(thread, err)
 				}
 
 				return starlarkstruct.FromStringDict(starlark.String("http_response"), starlark.StringDict{
@@ -100,7 +106,7 @@ func New(repoters Reporters) *starlarkstruct.Module {
 							&reason,
 						)
 						if err != nil {
-							return nil, err
+							return nil, utils.NewErrorWithStack(thread, err)
 						}
 
 						record.Failed(reason.GoString())
