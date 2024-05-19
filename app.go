@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	repoter "github.com/gurleensethi/load-send/internal/reporter"
+	repoter "github.com/gurleensethi/load-send/pkg/reporter"
 	"github.com/gurleensethi/load-send/pkg/starlark/modules"
 	"github.com/gurleensethi/load-send/pkg/starlark/script"
 	"github.com/urfave/cli/v2"
@@ -49,6 +49,8 @@ func NewApp() *cli.App {
 			if err != nil {
 				return err
 			}
+
+			fmt.Printf("running loadsend using %d VUs for %d seconds\n", vu, duration)
 
 			s := script.NewLifecycleScript(map[string]*starlarkstruct.Module{
 				"loadsend": modules.NewLoadSend(modules.LoadsendReporters{

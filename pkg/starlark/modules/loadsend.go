@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	repoter "github.com/gurleensethi/load-send/internal/reporter"
-	"github.com/gurleensethi/load-send/internal/starlark/utils"
+	repoter "github.com/gurleensethi/load-send/pkg/reporter"
+	"github.com/gurleensethi/load-send/pkg/starlark/utils"
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )

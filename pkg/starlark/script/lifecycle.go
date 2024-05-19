@@ -43,8 +43,6 @@ func (s *LifecycleScript) run(ctx context.Context, filename string, src any, opt
 		}
 	}
 
-	fmt.Printf("running loadsend using %d VUs for %.0f seconds\n", opts.VU, opts.Duration.Seconds())
-
 	predeclared := starlark.StringDict{}
 	if s.Modules != nil {
 		for key, value := range s.Modules {
@@ -185,6 +183,7 @@ func (s *LifecycleScript) runLifecycle(ctx context.Context, thread *starlark.Thr
 					}
 
 					// ===== After Each =====
+
 					if lc.afterEachFn != nil {
 						afterEachArgs := starlark.Tuple{}
 						if lc.afterEachFn.NumParams() > 0 {

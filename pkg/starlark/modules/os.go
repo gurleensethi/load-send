@@ -3,7 +3,7 @@ package modules
 import (
 	"os"
 
-	"github.com/gurleensethi/load-send/internal/starlark/utils"
+	"github.com/gurleensethi/load-send/pkg/starlark/utils"
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
