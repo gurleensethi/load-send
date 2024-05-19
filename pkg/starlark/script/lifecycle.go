@@ -16,7 +16,7 @@ type LifecycleScript struct {
 	Modules map[string]*starlarkstruct.Module
 }
 
-func New(m map[string]*starlarkstruct.Module) *LifecycleScript {
+func NewLifecycleScript(m map[string]*starlarkstruct.Module) *LifecycleScript {
 	return &LifecycleScript{
 		Modules: m,
 	}

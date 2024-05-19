@@ -5,9 +5,8 @@ import (
 	"time"
 
 	repoter "github.com/gurleensethi/load-send/internal/reporter"
-	"github.com/gurleensethi/load-send/internal/starlark/modules/loadsend"
-	lifecyclescript "github.com/gurleensethi/load-send/internal/starlark/script"
 	"github.com/gurleensethi/load-send/pkg/starlark/modules"
+	"github.com/gurleensethi/load-send/pkg/starlark/script"
 	"github.com/urfave/cli/v2"
 	"go.starlark.net/starlarkstruct"
 )
@@ -51,14 +50,14 @@ func NewApp() *cli.App {
 				return err
 			}
 
-			s := lifecyclescript.New(map[string]*starlarkstruct.Module{
-				"loadsend": loadsend.New(loadsend.Reporters{
+			s := script.NewLifecycleScript(map[string]*starlarkstruct.Module{
+				"loadsend": modules.NewLoadSend(modules.LoadsendReporters{
 					HttpRepoter: httpReporter,
 				}),
 				"os": modules.OS,
 			})
 
-			err = s.Run(ctx.Context, ctx.Args().Get(0), &lifecyclescript.RunOptions{
+			err = s.Run(ctx.Context, ctx.Args().Get(0), &script.RunOptions{
 				VU:       vu,
 				Duration: time.Duration(duration) * time.Second,
 			})

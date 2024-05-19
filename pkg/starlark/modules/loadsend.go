@@ -1,4 +1,4 @@
-package loadsend
+package modules
 
 import (
 	"bytes"
@@ -17,16 +17,16 @@ type LoadModule struct {
 	starlarkstruct.Module
 }
 
-type Reporters struct {
+type LoadsendReporters struct {
 	HttpRepoter *repoter.HttpRepoter
 }
 
-func New(repoters Reporters) *starlarkstruct.Module {
+func NewLoadSend(repoters LoadsendReporters) *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "loadsend",
 		Members: starlark.StringDict{
 			"http": starlark.NewBuiltin("http", func(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-				var method string
+				var method string = "GET"
 				var url string
 				var body string
 				var headers *starlark.Dict
@@ -56,6 +56,8 @@ func New(repoters Reporters) *starlarkstruct.Module {
 				}
 
 				record := repoters.HttpRepoter.NewRecord()
+				record.Set("url", url)
+				record.Set("method", method)
 
 				record.Start()
 				resp, err := http.DefaultClient.Do(httpReq)
