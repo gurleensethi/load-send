@@ -27,7 +27,15 @@ type RunOptions struct {
 	Duration time.Duration
 }
 
-func (s *LifecycleScript) Run(ctx context.Context, filename string, opts *RunOptions) error {
+func (s *LifecycleScript) RunFile(ctx context.Context, filename string, opts *RunOptions) error {
+	return s.run(ctx, filename, nil, opts)
+}
+
+func (s *LifecycleScript) RunSrc(ctx context.Context, src string, opts *RunOptions) error {
+	return s.run(ctx, "", []byte(src), opts)
+}
+
+func (s *LifecycleScript) run(ctx context.Context, filename string, src any, opts *RunOptions) error {
 	if opts == nil {
 		opts = &RunOptions{
 			VU:       5,
@@ -50,7 +58,7 @@ func (s *LifecycleScript) Run(ctx context.Context, filename string, opts *RunOpt
 		While:           true,
 		TopLevelControl: true,
 		GlobalReassign:  true,
-	}, thread, filename, nil, predeclared)
+	}, thread, filename, src, predeclared)
 	if err != nil {
 		return err
 	}
@@ -177,18 +185,17 @@ func (s *LifecycleScript) runLifecycle(ctx context.Context, thread *starlark.Thr
 					}
 
 					// ===== After Each =====
-
-					afterEachArgs := starlark.Tuple{}
-					if lc.afterEachFn.NumParams() > 0 {
-						data := starlarkstruct.FromKeywords(starlarkstruct.Default, []starlark.Tuple{
-							{starlark.String("before_all"), beforeAllReturn},
-							{starlark.String("before_each"), beforeEachReturn},
-							{starlark.String("run"), runReturn},
-						})
-						afterEachArgs = append(afterEachArgs, data)
-					}
-
 					if lc.afterEachFn != nil {
+						afterEachArgs := starlark.Tuple{}
+						if lc.afterEachFn.NumParams() > 0 {
+							data := starlarkstruct.FromKeywords(starlarkstruct.Default, []starlark.Tuple{
+								{starlark.String("before_all"), beforeAllReturn},
+								{starlark.String("before_each"), beforeEachReturn},
+								{starlark.String("run"), runReturn},
+							})
+							afterEachArgs = append(afterEachArgs, data)
+						}
+
 						_, err := starlark.Call(thread, lc.afterEachFn, afterEachArgs, []starlark.Tuple{})
 						if err != nil {
 							fmt.Println(err)

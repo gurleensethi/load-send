@@ -57,7 +57,7 @@ func NewApp() *cli.App {
 				"os": modules.OS,
 			})
 
-			err = s.Run(ctx.Context, ctx.Args().Get(0), &script.RunOptions{
+			err = s.RunFile(ctx.Context, ctx.Args().Get(0), &script.RunOptions{
 				VU:       vu,
 				Duration: time.Duration(duration) * time.Second,
 			})
